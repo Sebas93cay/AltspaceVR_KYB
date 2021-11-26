@@ -58,23 +58,56 @@ export default class HelloWorld {
 				easing: MRE.AnimationEaseCurves.EaseOutSine,
 			});
 		});
-		buttonBehavior.onClick((user) => this.showKYB(user));
+		buttonBehavior.onClick((user) => this.promptKYB(user));
 	}
 
-	private showKYB(user: MRE.User) {
+	private promptKYB(user: MRE.User) {
+		let companyName: string;
+		let rfc: string;
+		let brand: string;
 		console.log(`${user.name} has pressed the button`);
 		user.prompt(
 			`Bienvenido a su KYB VR
 		Por favor introduzca la Razón Social:`,
 			true
-		).then((res) => {
-			if (res.submitted && res.text.length > 0) {
-				console.log("Lo logro");
-			} else {
-				user.prompt(
-					"Lo sentimos pero la razón Social es necesaria para la busqueda"
-				);
-			}
-		});
+		)
+			.then((compNameRes) => {
+				if (compNameRes.submitted && compNameRes.text.length > 0) {
+					companyName = compNameRes.text;
+					return user.prompt(`Introdusca el RFC:`, true);
+				} else if (compNameRes.submitted) {
+					user.prompt(
+						"Lo sentimos pero la razón Social es necesaria para la busqueda"
+					);
+				} else {
+					console.log("user cancelled in company name");
+					return null;
+				}
+			})
+			.then((rfcRes) => {
+				if (rfcRes.submitted && rfcRes.text.length > 0) {
+					rfc = rfcRes.text;
+				} else if (rfcRes.submitted) {
+					rfc = null;
+				} else {
+					console.log("user canceled in rfc");
+					return null;
+				}
+				return user.prompt(`Introdusca la marca:`, true);
+			})
+			.then((brandRes) => {
+				if (brandRes.submitted && brandRes.text.length > 0) {
+					brand = brandRes.text;
+				} else if (brandRes.submitted) {
+					brand = null;
+				} else {
+					console.log("user canceled in brand");
+					return null;
+				}
+				console.log(companyName, rfc, brand);
+			})
+			.catch((err) => {
+				console.log(err);
+			});
 	}
 }
