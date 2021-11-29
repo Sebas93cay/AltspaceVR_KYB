@@ -9,7 +9,7 @@ import fetch from "cross-fetch";
 const TEXTHEIGHT = 0.3;
 const TEXTDATAHEIGHT = 0.1;
 const BUTTONWIDTH = 0.1;
-const BACKGROUNDSIZE = { x: 5, y: 2 };
+const BACKGROUNDSIZE = { x: 6, y: 2 };
 
 /**
  * The main class of this app. All the logic goes here.
@@ -494,13 +494,20 @@ export default class HelloWorld {
 			return;
 		} else if (impi.code === 200) {
 			const screens = new Array<MRE.Actor>();
-			console.log("general data", impi.data[2].generalData);
-			console.log("headline data", impi.data[2].headlineData);
-			console.log(
-				"product and services",
-				impi.data[2].productsAndServices
-			);
-			console.log("procedures", impi.data[2].productsAndServices);
+			// console.log("general data", typeof impi.data[2].generalData);
+			// console.log("general data", impi.data[2].generalData);
+			// console.log("headline data", typeof impi.data[2].headlineData);
+			// console.log("headline data", impi.data[2].headlineData);
+			// console.log(
+			// 	"product and services",
+			// 	typeof impi.data[2].productsAndServices
+			// );
+			// console.log(
+			// 	"product and services",
+			// 	impi.data[2].productsAndServices
+			// );
+			// console.log("procedures", typeof impi.data[2].procedures);
+			// console.log("procedures", impi.data[2].procedures);
 			impi.data.forEach((record: object, index: number) => {
 				const screen = MRE.Actor.Create(this.context, {
 					actor: {
@@ -523,16 +530,57 @@ export default class HelloWorld {
 				let textYPos = 0;
 				let i = 0;
 				for (const [key, value] of Object.entries(record)) {
-					this.createText(
-						`${key}: ${value}`,
-						`satDataField${i}`,
-						screen.id,
-						MRE.TextAnchorLocation.TopLeft,
-						{ x: 0, y: textYPos, z: 0 },
-						TEXTDATAHEIGHT,
-						{ r: 1, g: 1, b: 1 }
-					);
-					textYPos -= TEXTDATAHEIGHT;
+					if (typeof value === "object") {
+						if (Array.isArray(value)) {
+							console.log("el array", key, value);
+							this.createText(
+								`${key}: is an array`,
+								`satDataField${i}`,
+								screen.id,
+								MRE.TextAnchorLocation.TopLeft,
+								{ x: 0, y: textYPos, z: 0 },
+								TEXTDATAHEIGHT,
+								{ r: 1, g: 1, b: 1 }
+							);
+							textYPos -= TEXTDATAHEIGHT;
+						} else {
+							this.createText(
+								`${key}:`,
+								`satDataField${i}`,
+								screen.id,
+								MRE.TextAnchorLocation.TopLeft,
+								{ x: 0, y: textYPos, z: 0 },
+								TEXTDATAHEIGHT,
+								{ r: 1, g: 1, b: 1 }
+							);
+							textYPos -= TEXTDATAHEIGHT;
+							for (const [okey, ovalue] of Object.entries(
+								value
+							)) {
+								this.createText(
+									`        ${okey}: ${ovalue}`,
+									`satDataField${i}`,
+									screen.id,
+									MRE.TextAnchorLocation.TopLeft,
+									{ x: 0, y: textYPos, z: 0 },
+									TEXTDATAHEIGHT,
+									{ r: 1, g: 1, b: 1 }
+								);
+								textYPos -= TEXTDATAHEIGHT;
+							}
+						}
+					} else {
+						this.createText(
+							`${key}: ${value}`,
+							`satDataField${i}`,
+							screen.id,
+							MRE.TextAnchorLocation.TopLeft,
+							{ x: 0, y: textYPos, z: 0 },
+							TEXTDATAHEIGHT,
+							{ r: 1, g: 1, b: 1 }
+						);
+						textYPos -= TEXTDATAHEIGHT;
+					}
 					i += 1;
 				}
 			});
