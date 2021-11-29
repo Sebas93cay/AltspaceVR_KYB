@@ -4,11 +4,12 @@
  */
 
 import * as MRE from "@microsoft/mixed-reality-extension-sdk";
-import { ButtonBehavior } from "@microsoft/mixed-reality-extension-sdk";
 import fetch from "cross-fetch";
 
 const TEXTHEIGHT = 0.3;
+const TEXTDATAHEIGHT = 0.1;
 const BUTTONWIDTH = 0.1;
+const BACKGROUNDSIZE = { x: 5, y: 2 };
 
 /**
  * The main class of this app. All the logic goes here.
@@ -33,12 +34,8 @@ export default class HelloWorld {
 		this.startButton = this.createButtonBox(
 			"IntialButton",
 			null,
-			0,
-			0,
-			0,
-			0.9,
-			0.5,
-			BUTTONWIDTH
+			{ x: 0, y: 0, z: 0 },
+			{ x: 0.9, y: 0.5, z: BUTTONWIDTH }
 		);
 		this.createBoxLabel("KYB", this.startButton.id, 1, 1);
 
@@ -124,357 +121,20 @@ export default class HelloWorld {
 			});
 	}
 
-	private showActor(actor: MRE.Actor, show: boolean, y?: number) {
-		actor.appearance.enabled = show;
-		actor.transform.local.position.y = show ? y : 10;
-	}
-
-	private createText(
-		contents: string,
-		name: string,
-		anchor: MRE.TextAnchorLocation,
-		parentId: MRE.Guid,
-		position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 },
-		height: number = TEXTHEIGHT,
-		color: { r: number; g: number; b: number } = { r: 0, g: 0, b: 0 }
-	) {
-		return MRE.Actor.Create(this.context, {
-			actor: {
-				name: name,
-				parentId: parentId,
-				text: {
-					contents: contents,
-					anchor: anchor,
-					color: color,
-					height: height,
-				},
-				transform: {
-					local: {
-						position: position,
-					},
-				},
-			},
-		});
-	}
-
 	private kybSearch(companyName: string, rfc: string, brand: string) {
 		console.log(companyName, rfc, brand);
 		this.showActor(this.startButton, false);
 		const waitingText = this.createText(
-			"Por favor espere un rato ...",
+			"Por favor espere un momento ...",
 			"waitingText",
-			MRE.TextAnchorLocation.MiddleCenter,
-			null
+			null,
+			MRE.TextAnchorLocation.MiddleCenter
 		);
 
 		this.consult(companyName, brand, rfc).then((res) => {
 			this.createOptions();
 			waitingText.destroy();
-			this.createOptionsData(res[0], res[1]);
-		});
-	}
-
-	private createOptions() {
-		const baseOptions = MRE.Actor.Create(this.context, {
-			actor: {
-				name: "baseOptions",
-				parentId: this.base.id,
-			},
-		});
-
-		const satButtonBox = this.createButtonBox(
-			"satButton",
-			baseOptions.id,
-			-0.5,
-			0,
-			0,
-			0.9,
-			1.5,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("SAT", satButtonBox.id, 1, 0.5);
-		satButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.showSAT());
-
-		const impiButtonBox = this.createButtonBox(
-			"impiButton",
-			baseOptions.id,
-			0.5,
-			0,
-			0,
-			0.9,
-			1.5,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("IMPI", impiButtonBox.id, 1, 0.5);
-		impiButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.showIMPI());
-
-		const exitButtonBox = this.createButtonBox(
-			"newSearch",
-			baseOptions.id,
-			0,
-			1,
-			0,
-			0.6,
-			0.4,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("Exit", exitButtonBox.id, 1, 1.6);
-		exitButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.exitKYB());
-	}
-
-	private destroyActorInBase(name: string) {
-		const actor = this.base.findChildrenByName("baseOptions", true);
-		if (actor.length > 0) {
-			actor[0].destroy();
-		}
-	}
-
-	private showIMPI() {
-		this.destroyActorInBase("baseOptions");
-		const baseOptionsData = this.base.findChildrenByName(
-			"baseOptionsData",
-			true
-		)[0];
-		this.showActor(baseOptionsData, true, 0);
-		this.showActor(
-			baseOptionsData.findChildrenByName("satBody", true)[0],
-			false
-		);
-		this.showActor(
-			baseOptionsData.findChildrenByName("impiBody", true)[0],
-			true,
-			0
-		);
-	}
-
-	private showSAT() {
-		this.destroyActorInBase("baseOptions");
-		const baseOptionsData = this.base.findChildrenByName(
-			"baseOptionsData",
-			true
-		)[0];
-		this.showActor(baseOptionsData, true, 0);
-		this.showActor(
-			baseOptionsData.findChildrenByName("impiBody", true)[0],
-			false
-		);
-		this.showActor(
-			baseOptionsData.findChildrenByName("satBody", true)[0],
-			true,
-			0
-		);
-	}
-
-	private createOptionsData(
-		sat: Promise<any>,
-		brands: Promise<any>
-	): MRE.Actor {
-		const baseOptionsData = MRE.Actor.Create(this.context, {
-			actor: {
-				name: "baseOptionsData",
-				parentId: this.base.id,
-				appearance: { enabled: false },
-				transform: {
-					local: {
-						position: {
-							x: 0,
-							y: 10,
-							z: 0,
-						},
-					},
-				},
-			},
-		});
-
-		// This is the background for the data
-		this.createButtonBox(
-			"dataBackground",
-			baseOptionsData.id,
-			0,
-			0,
-			0,
-			3,
-			2,
-			0.02
-		);
-
-		const satButtonBox = this.createButtonBox(
-			"satButton",
-			baseOptionsData.id,
-			-0.9,
-			1.5,
-			0,
-			0.7,
-			0.4,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("SAT", satButtonBox.id, 1.1, 1.7);
-		satButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.showSAT());
-		const satBody = MRE.Actor.Create(this.context, {
-			actor: {
-				name: "satBody",
-				parentId: baseOptionsData.id,
-				appearance: { enabled: false },
-				text: {
-					contents: "sat Body",
-					anchor: MRE.TextAnchorLocation.MiddleCenter,
-					height: TEXTHEIGHT,
-				},
-				transform: {
-					local: {
-						position: {
-							x: 0,
-							y: 0,
-							z: -0.05,
-						},
-					},
-				},
-			},
-		});
-		this.fillSatBody(satBody, sat);
-
-		const impiButtonBox = this.createButtonBox(
-			"impiButton",
-			baseOptionsData.id,
-			0.9,
-			1.5,
-			0,
-			0.7,
-			0.4,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("IMPI", impiButtonBox.id, 1.1, 1.7);
-		impiButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.showIMPI());
-		const impiBody = MRE.Actor.Create(this.context, {
-			actor: {
-				name: "impiBody",
-				parentId: baseOptionsData.id,
-				appearance: { enabled: false },
-				text: {
-					contents: "impi Body",
-					anchor: MRE.TextAnchorLocation.MiddleCenter,
-					height: TEXTHEIGHT,
-				},
-				transform: {
-					local: {
-						position: {
-							x: 0,
-							y: 0,
-							z: -0.05,
-						},
-					},
-				},
-			},
-		});
-
-		const exitButtonBox = this.createButtonBox(
-			"newSearch",
-			baseOptionsData.id,
-			0,
-			1.5,
-			0,
-			0.6,
-			0.4,
-			BUTTONWIDTH
-		);
-		this.createBoxLabel("Exit", exitButtonBox.id, 1, 1.6);
-		exitButtonBox
-			.setBehavior(MRE.ButtonBehavior)
-			.onClick(() => this.exitKYB());
-
-		return baseOptionsData;
-	}
-
-	private fillSatBody(satBody: MRE.Actor, sat: Promise<any>) {
-		console.log(sat);
-	}
-
-	private exitKYB() {
-		const baseOptions = this.base.findChildrenByName("baseOptions", true);
-		if (baseOptions.length > 0) {
-			baseOptions[0].destroy();
-		}
-		const baseOptionsData = this.base.findChildrenByName(
-			"baseOptionsData",
-			true
-		);
-		if (baseOptionsData.length > 0) {
-			baseOptionsData[0].destroy();
-		}
-		this.showActor(this.startButton, true, 0);
-	}
-
-	private createButtonBox(
-		name: string,
-		parentId: MRE.Guid,
-		xPos: number,
-		yPos: number,
-		zPos: number,
-		xScl: number,
-		yScl: number,
-		zScl: number
-	): MRE.Actor {
-		return MRE.Actor.CreatePrimitive(this.assets, {
-			definition: { shape: MRE.PrimitiveShape.Box },
-			actor: {
-				parentId: parentId,
-				name: name,
-				collider: { geometry: { shape: MRE.ColliderType.Auto } },
-				transform: {
-					local: {
-						scale: { x: xScl, y: yScl, z: zScl },
-						position: { x: xPos, y: yPos, z: zPos },
-					},
-				},
-			},
-		});
-	}
-
-	private createBoxLabel(
-		label: string,
-		parentId: MRE.Guid,
-		xScale: number,
-		yScale: number
-	): MRE.Actor {
-		return MRE.Actor.Create(this.context, {
-			actor: {
-				parentId: parentId,
-				name: "buttonlabel",
-				text: {
-					contents: label,
-					anchor: MRE.TextAnchorLocation.MiddleCenter,
-					color: { r: 0, g: 0, b: 0 },
-					height: TEXTHEIGHT,
-				},
-				transform: {
-					local: {
-						position: { x: 0, y: 0, z: -1 },
-						scale: { x: xScale, y: yScale, z: 1 },
-					},
-				},
-			},
-		});
-	}
-
-	private consultMock(
-		companyName: string,
-		brand: string,
-		rfc: string
-	): Promise<any> {
-		return new Promise((resolve) => {
-			setTimeout(() => {
-				resolve(3);
-			}, 500);
+			this.createOptionsData(res.sat, res.brands);
 		});
 	}
 
@@ -542,6 +202,484 @@ export default class HelloWorld {
 				sat = null;
 			}
 			return { brands: brands, sat: sat };
+		});
+	}
+
+	private createOptions() {
+		const baseOptions = MRE.Actor.Create(this.context, {
+			actor: {
+				name: "baseOptions",
+				parentId: this.base.id,
+			},
+		});
+
+		const satButtonBox = this.createButtonBox(
+			"satButton",
+			baseOptions.id,
+			{ x: -0.5, y: 0, z: 0 },
+			{ x: 0.9, y: 1.5, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("SAT", satButtonBox.id, 1, 0.5);
+		satButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.showSAT());
+
+		const impiButtonBox = this.createButtonBox(
+			"impiButton",
+			baseOptions.id,
+			{ x: 0.5, y: 0, z: 0 },
+			{ x: 0.9, y: 1.5, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("IMPI", impiButtonBox.id, 1, 0.5);
+		impiButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.showIMPI());
+
+		const exitButtonBox = this.createButtonBox(
+			"newSearch",
+			baseOptions.id,
+			{ x: 0, y: 1, z: 0 },
+			{ x: 0.6, y: 0.4, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("Exit", exitButtonBox.id, 1, 1.6);
+		exitButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.exitKYB());
+	}
+
+	private createOptionsData(
+		sat: Promise<any>,
+		brands: Promise<any>
+	): MRE.Actor {
+		const baseOptionsData = MRE.Actor.Create(this.context, {
+			actor: {
+				name: "baseOptionsData",
+				parentId: this.base.id,
+				appearance: { enabled: false },
+				transform: {
+					local: {
+						position: {
+							x: 0,
+							y: 10,
+							z: 0,
+						},
+					},
+				},
+			},
+		});
+
+		// This is the background for the data
+		this.createButtonBox(
+			"dataBackground",
+			baseOptionsData.id,
+			{ x: (BACKGROUNDSIZE.x - 3) / 2, y: 0, z: 0 },
+			{ x: BACKGROUNDSIZE.x, y: BACKGROUNDSIZE.y, z: 0.02 }
+		);
+
+		const satButtonBox = this.createButtonBox(
+			"satButton",
+			baseOptionsData.id,
+			{ x: -0.9, y: 1.5, z: 0 },
+			{ x: 0.7, y: 0.4, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("SAT", satButtonBox.id, 1.1, 1.7);
+		satButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.showSAT());
+		const satBody = MRE.Actor.Create(this.context, {
+			actor: {
+				name: "satBody",
+				parentId: baseOptionsData.id,
+				appearance: { enabled: false },
+				transform: {
+					local: {
+						position: {
+							x: 0,
+							y: 0,
+							z: -0.05,
+						},
+					},
+				},
+			},
+		});
+		this.fillSatBody(satBody, sat);
+
+		const impiButtonBox = this.createButtonBox(
+			"impiButton",
+			baseOptionsData.id,
+			{ x: 0.9, y: 1.5, z: 0 },
+			{ x: 0.7, y: 0.4, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("IMPI", impiButtonBox.id, 1.1, 1.7);
+		impiButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.showIMPI());
+		const impiBody = MRE.Actor.Create(this.context, {
+			actor: {
+				name: "impiBody",
+				parentId: baseOptionsData.id,
+				appearance: { enabled: false },
+				transform: {
+					local: {
+						position: {
+							x: 0,
+							y: 0,
+							z: -0.05,
+						},
+					},
+				},
+			},
+		});
+		this.fillImpiBody(impiBody, brands);
+
+		const exitButtonBox = this.createButtonBox(
+			"newSearch",
+			baseOptionsData.id,
+			{ x: 0, y: 1.5, z: 0 },
+			{ x: 0.6, y: 0.4, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("Exit", exitButtonBox.id, 1, 1.6);
+		exitButtonBox
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick(() => this.exitKYB());
+
+		return baseOptionsData;
+	}
+	private showIMPI() {
+		this.destroyActorInBase("baseOptions");
+		const baseOptionsData = this.base.findChildrenByName(
+			"baseOptionsData",
+			true
+		)[0];
+		this.showActor(baseOptionsData, true, 0);
+		this.showActor(
+			baseOptionsData.findChildrenByName("satBody", true)[0],
+			false
+		);
+		this.showActor(
+			baseOptionsData.findChildrenByName("impiBody", true)[0],
+			true,
+			0
+		);
+	}
+
+	private showSAT() {
+		this.destroyActorInBase("baseOptions");
+		const baseOptionsData = this.base.findChildrenByName(
+			"baseOptionsData",
+			true
+		)[0];
+		this.showActor(baseOptionsData, true, 0);
+		this.showActor(
+			baseOptionsData.findChildrenByName("impiBody", true)[0],
+			false
+		);
+		this.showActor(
+			baseOptionsData.findChildrenByName("satBody", true)[0],
+			true,
+			0
+		);
+	}
+
+	private async fillSatBody(satBody: MRE.Actor, satPromise: Promise<any>) {
+		const sat = await satPromise.then((res) => {
+			return res;
+		});
+		if (sat.code === 204) {
+			this.createText(
+				sat.message,
+				"message",
+				satBody.id,
+				MRE.TextAnchorLocation.TopLeft,
+				{ x: -1.4, y: BACKGROUNDSIZE.y / 2 - 0.1, z: 0 },
+				TEXTDATAHEIGHT
+			);
+			return;
+		} else if (sat.code === 200) {
+			const screens = new Array<MRE.Actor>();
+			// sat.data.push({
+			// 	juanito: "alimana",
+			// 	carrancho: "narices de gancho",
+			// });
+			sat.data.forEach((record: object, index: number) => {
+				const screen = MRE.Actor.Create(this.context, {
+					actor: {
+						parentId: satBody.id,
+						appearance: { enabled: false },
+						transform: {
+							local: { position: { x: -1.4, y: 0.9, z: 0 } },
+						},
+					},
+				});
+				screens.push(screen);
+				this.createText(
+					`${index + 1}/${sat.data.length}`,
+					"numerator",
+					screen.id,
+					MRE.TextAnchorLocation.MiddleCenter,
+					{ x: 1.4, y: 0.2, z: 0 },
+					0.2
+				);
+				let textYPos = 0;
+				let i = 0;
+				for (const [key, value] of Object.entries(record)) {
+					this.createText(
+						`${key}: ${value}`,
+						`satDataField${i}`,
+						screen.id,
+						MRE.TextAnchorLocation.TopLeft,
+						{ x: 0, y: textYPos, z: 0 },
+						TEXTDATAHEIGHT,
+						{ r: 1, g: 1, b: 1 }
+					);
+					textYPos -= TEXTDATAHEIGHT;
+					i += 1;
+				}
+			});
+			let currentScreen = 0;
+			screens[currentScreen].appearance.enabled = true;
+
+			const nextButtonBox = this.createButtonBox(
+				"satNext",
+				satBody.id,
+				{ x: -2, y: 0.3, z: 0 },
+				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Next", nextButtonBox.id, 1, 1.5);
+			nextButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screens[currentScreen].appearance.enabled = false;
+				currentScreen = (currentScreen + 1) % screens.length;
+				screens[currentScreen].appearance.enabled = true;
+			});
+			const prevButtonBox = this.createButtonBox(
+				"satNext",
+				satBody.id,
+				{ x: -2, y: -0.3, z: 0 },
+				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Prev", prevButtonBox.id, 1, 1.5);
+			prevButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screens[currentScreen].appearance.enabled = false;
+				currentScreen = (currentScreen - 1) % screens.length;
+				currentScreen =
+					currentScreen === -1 ? screens.length - 1 : currentScreen;
+				screens[currentScreen].appearance.enabled = true;
+			});
+		}
+	}
+
+	private async fillImpiBody(impiBody: MRE.Actor, impiPromise: Promise<any>) {
+		const impi = await impiPromise.then((res) => {
+			return res;
+		});
+		if (!impi) {
+			this.createText(
+				"No se hizo ninguna consulta de marcas",
+				"message",
+				impiBody.id,
+				MRE.TextAnchorLocation.TopLeft,
+				{ x: -1.4, y: BACKGROUNDSIZE.y / 2 - 0.1, z: 0 },
+				TEXTDATAHEIGHT
+			);
+			return;
+		} else if (impi.code === 204) {
+			this.createText(
+				impi.message,
+				"message",
+				impiBody.id,
+				MRE.TextAnchorLocation.TopLeft,
+				{ x: -1.4, y: BACKGROUNDSIZE.y / 2 - 0.1, z: 0 },
+				TEXTDATAHEIGHT
+			);
+			return;
+		} else if (impi.code === 200) {
+			const screens = new Array<MRE.Actor>();
+			console.log("general data", impi.data[2].generalData);
+			console.log("headline data", impi.data[2].headlineData);
+			console.log(
+				"product and services",
+				impi.data[2].productsAndServices
+			);
+			console.log("procedures", impi.data[2].productsAndServices);
+			impi.data.forEach((record: object, index: number) => {
+				const screen = MRE.Actor.Create(this.context, {
+					actor: {
+						parentId: impiBody.id,
+						appearance: { enabled: false },
+						transform: {
+							local: { position: { x: -1.4, y: 0.9, z: 0 } },
+						},
+					},
+				});
+				screens.push(screen);
+				this.createText(
+					`${index + 1}/${impi.data.length}`,
+					"numerator",
+					screen.id,
+					MRE.TextAnchorLocation.MiddleCenter,
+					{ x: 1.4, y: 0.2, z: 0 },
+					0.2
+				);
+				let textYPos = 0;
+				let i = 0;
+				for (const [key, value] of Object.entries(record)) {
+					this.createText(
+						`${key}: ${value}`,
+						`satDataField${i}`,
+						screen.id,
+						MRE.TextAnchorLocation.TopLeft,
+						{ x: 0, y: textYPos, z: 0 },
+						TEXTDATAHEIGHT,
+						{ r: 1, g: 1, b: 1 }
+					);
+					textYPos -= TEXTDATAHEIGHT;
+					i += 1;
+				}
+			});
+			let currentScreen = 0;
+			screens[currentScreen].appearance.enabled = true;
+
+			const nextButtonBox = this.createButtonBox(
+				"satNext",
+				impiBody.id,
+				{ x: -2, y: 0.3, z: 0 },
+				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Next", nextButtonBox.id, 1, 1.5);
+			nextButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screens[currentScreen].appearance.enabled = false;
+				currentScreen = (currentScreen + 1) % screens.length;
+				screens[currentScreen].appearance.enabled = true;
+			});
+			const prevButtonBox = this.createButtonBox(
+				"satNext",
+				impiBody.id,
+				{ x: -2, y: -0.3, z: 0 },
+				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Prev", prevButtonBox.id, 1, 1.5);
+			prevButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screens[currentScreen].appearance.enabled = false;
+				currentScreen = (currentScreen - 1) % screens.length;
+				currentScreen =
+					currentScreen === -1 ? screens.length - 1 : currentScreen;
+				screens[currentScreen].appearance.enabled = true;
+			});
+		}
+	}
+
+	private showActor(actor: MRE.Actor, show: boolean, y?: number) {
+		actor.appearance.enabled = show;
+		actor.transform.local.position.y = show ? y : 10;
+	}
+
+	private createText(
+		contents: string,
+		name: string,
+		parentId: MRE.Guid,
+		anchor: MRE.TextAnchorLocation = MRE.TextAnchorLocation.TopLeft,
+		position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 },
+		height: number = TEXTHEIGHT,
+		color: { r: number; g: number; b: number } = { r: 0, g: 0, b: 0 }
+	) {
+		return MRE.Actor.Create(this.context, {
+			actor: {
+				name: name,
+				parentId: parentId,
+				text: {
+					contents: contents,
+					anchor: anchor,
+					color: color,
+					height: height,
+				},
+				transform: {
+					local: {
+						position: position,
+					},
+				},
+			},
+		});
+	}
+
+	private destroyActorInBase(name: string) {
+		const actor = this.base.findChildrenByName("baseOptions", true);
+		if (actor.length > 0) {
+			actor[0].destroy();
+		}
+	}
+
+	private exitKYB() {
+		const baseOptions = this.base.findChildrenByName("baseOptions", true);
+		if (baseOptions.length > 0) {
+			baseOptions[0].destroy();
+		}
+		const baseOptionsData = this.base.findChildrenByName(
+			"baseOptionsData",
+			true
+		);
+		if (baseOptionsData.length > 0) {
+			baseOptionsData[0].destroy();
+		}
+		this.showActor(this.startButton, true, 0);
+	}
+
+	private createButtonBox(
+		name: string,
+		parentId: MRE.Guid,
+		position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 },
+		scale: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }
+	): MRE.Actor {
+		return MRE.Actor.CreatePrimitive(this.assets, {
+			definition: { shape: MRE.PrimitiveShape.Box },
+			actor: {
+				parentId: parentId,
+				name: name,
+				collider: { geometry: { shape: MRE.ColliderType.Auto } },
+				transform: {
+					local: {
+						scale: scale,
+						position: position,
+					},
+				},
+			},
+		});
+	}
+
+	private createBoxLabel(
+		label: string,
+		parentId: MRE.Guid,
+		xScale: number,
+		yScale: number
+	): MRE.Actor {
+		return MRE.Actor.Create(this.context, {
+			actor: {
+				parentId: parentId,
+				name: "buttonlabel",
+				text: {
+					contents: label,
+					anchor: MRE.TextAnchorLocation.MiddleCenter,
+					color: { r: 0, g: 0, b: 0 },
+					height: TEXTHEIGHT,
+				},
+				transform: {
+					local: {
+						position: { x: 0, y: 0, z: -1 },
+						scale: { x: xScale, y: yScale, z: 1 },
+					},
+				},
+			},
+		});
+	}
+
+	private consultMock(
+		companyName: string,
+		brand: string,
+		rfc: string
+	): Promise<any> {
+		return new Promise((resolve) => {
+			setTimeout(() => {
+				resolve(3);
+			}, 500);
 		});
 	}
 }
