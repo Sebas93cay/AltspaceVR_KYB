@@ -10,6 +10,13 @@ const TEXTHEIGHT = 0.3;
 const TEXTDATAHEIGHT = 0.1;
 const BUTTONWIDTH = 0.1;
 const BACKGROUNDSIZE = { x: 6, y: 2 };
+const XSCALESUBSCREENS = 0.5;
+const YSCALESUBSCREENS = 1.5;
+
+interface ScreenRecords {
+	screens: MRE.Actor[];
+	currentScreen: number;
+}
 
 /**
  * The main class of this app. All the logic goes here.
@@ -17,7 +24,6 @@ const BACKGROUNDSIZE = { x: 6, y: 2 };
 export default class HelloWorld {
 	// private button: MRE.Actor = null;
 	private base: MRE.Actor = null;
-	private startButton: MRE.Actor = null;
 	private assets: MRE.AssetContainer;
 
 	constructor(private context: MRE.Context) {
@@ -31,21 +37,35 @@ export default class HelloWorld {
 		// set up somewhere to store loaded assets (meshes, textures, animations, gltfs, etc.)
 		this.assets = new MRE.AssetContainer(this.context);
 		this.base = MRE.Actor.Create(this.context, {});
-		this.startButton = this.createButtonBox(
-			"IntialButton",
-			null,
+		const startingButtons = MRE.Actor.Create(this.context, {
+			actor: {
+				name: "startingButtons",
+				parentId: this.base.id,
+			},
+		});
+		const startButton = this.createButtonBox(
+			"intialButton",
+			startingButtons.id,
 			{ x: 0, y: 0, z: 0 },
 			{ x: 0.9, y: 0.5, z: BUTTONWIDTH }
 		);
-		this.createBoxLabel("KYB", this.startButton.id, 1, 1);
+		this.createBoxLabel("KYB", startButton.id, 1, 1);
+
+		const historyButton = this.createButtonBox(
+			"historyButton",
+			startingButtons.id,
+			{ x: 1, y: 0, z: 0 },
+			{ x: 0.9, y: 0.5, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("Search\nHistory", historyButton.id, 0.6, 0.7);
 
 		//button has to behave as a button
-		const buttonBehavior = this.startButton.setBehavior(MRE.ButtonBehavior);
+		const buttonBehavior = startButton.setBehavior(MRE.ButtonBehavior);
 
 		//nice hover in button
 		buttonBehavior.onHover("enter", () => {
 			// use the convenience function "AnimateTo" instead of creating the animation data in advance
-			MRE.Animation.AnimateTo(this.context, this.startButton, {
+			MRE.Animation.AnimateTo(this.context, startButton, {
 				destination: {
 					transform: {
 						local: { scale: { x: 1, y: 0.6, z: BUTTONWIDTH } },
@@ -56,7 +76,7 @@ export default class HelloWorld {
 			});
 		});
 		buttonBehavior.onHover("exit", () => {
-			MRE.Animation.AnimateTo(this.context, this.startButton, {
+			MRE.Animation.AnimateTo(this.context, startButton, {
 				destination: {
 					transform: {
 						local: { scale: { x: 0.9, y: 0.5, z: BUTTONWIDTH } },
@@ -75,17 +95,20 @@ export default class HelloWorld {
 		let brand: string;
 		console.log(`${user.name} has pressed the button`);
 		user.prompt(
-			`Bienvenido a su KYB VR
-		Por favor introduzca la Razón Social:`,
+			`Welcome to your everyday VR KYB!
+			Please insert the name of the company`,
+			// 	`Bienvenido a su KYB VR
+			// Por favor introduzca la Razón Social:`,
 			true
 		)
 			.then((compNameRes) => {
 				if (compNameRes.submitted && compNameRes.text.length > 0) {
 					companyName = compNameRes.text;
-					return user.prompt(`Introdusca el RFC:`, true);
+					return user.prompt(`Introduce the RFC:`, true);
 				} else if (compNameRes.submitted) {
 					user.prompt(
-						"Lo sentimos pero la razón Social es necesaria para la busqueda"
+						"Sorry, but the name is necessary for the search"
+						// "Lo sentimos pero la razón Social es necesaria para la busqueda"
 					);
 				} else {
 					console.log("user cancelled in company name");
@@ -95,10 +118,11 @@ export default class HelloWorld {
 			.then((rfcRes) => {
 				if (rfcRes.submitted && rfcRes.text.length > 0) {
 					rfc = rfcRes.text;
-					return user.prompt(`Introdusca la marca:`, true);
+					return user.prompt(`Introduce the brand`, true);
 				} else if (rfcRes.submitted) {
 					user.prompt(
-						"Lo sentimos pero el RFC es necesario para la busqueda"
+						"Sorry, but the RFC is necessary for the search"
+						// "Lo sentimos pero el RFC es necesario para la busqueda"
 					);
 				} else {
 					console.log("user canceled in rfc");
@@ -123,9 +147,13 @@ export default class HelloWorld {
 
 	private kybSearch(companyName: string, rfc: string, brand: string) {
 		console.log(companyName, rfc, brand);
-		this.showActor(this.startButton, false);
+		const startingButtons = this.base.findChildrenByName(
+			"startingButtons",
+			true
+		)[0];
+		this.showActor(startingButtons, false, 0);
 		const waitingText = this.createText(
-			"Por favor espere un momento ...",
+			"Please wait a moment ...",
 			"waitingText",
 			null,
 			MRE.TextAnchorLocation.MiddleCenter
@@ -138,7 +166,7 @@ export default class HelloWorld {
 		});
 	}
 
-	private consult(
+	private async consult(
 		companyName: string,
 		brand: string,
 		rfc: string
@@ -186,23 +214,22 @@ export default class HelloWorld {
 		let brands: object;
 		let sat: object;
 
-		return Promise.allSettled([satConsult, brandsConsult]).then((ress) => {
-			if (ress[0].status === "fulfilled") {
-				console.log("brands fullfilled");
-				brands = brandsConsult;
-			} else {
-				brands = null;
-				console.log("brands rejected");
-			}
-			if (ress[1].status === "fulfilled") {
-				console.log("sat fulfilled");
-				sat = satConsult;
-			} else {
-				console.log("sat rejected");
-				sat = null;
-			}
-			return { brands: brands, sat: sat };
-		});
+		const ress = await Promise.allSettled([satConsult, brandsConsult]);
+		if (ress[0].status === "fulfilled") {
+			console.log("brands fullfilled");
+			brands = brandsConsult;
+		} else {
+			brands = null;
+			console.log("brands rejected");
+		}
+		if (ress[1].status === "fulfilled") {
+			console.log("sat fulfilled");
+			sat = satConsult;
+		} else {
+			console.log("sat rejected");
+			sat = null;
+		}
+		return { brands: brands, sat: sat };
 	}
 
 	private createOptions() {
@@ -493,7 +520,18 @@ export default class HelloWorld {
 			);
 			return;
 		} else if (impi.code === 200) {
-			const screens = new Array<MRE.Actor>();
+			const impiRecords = MRE.Actor.Create(this.context, {
+				actor: {
+					name: "impiRecords",
+					parentId: impiBody.id,
+				},
+			});
+			// const mainScreens = new Array<MRE.Actor>();
+			// const procedures = new Array<MRE.Actor[]>();
+			const screensToNavigate: ScreenRecords = {
+				screens: null,
+				currentScreen: 0,
+			};
 			// console.log("general data", typeof impi.data[2].generalData);
 			// console.log("general data", impi.data[2].generalData);
 			// console.log("headline data", typeof impi.data[2].headlineData);
@@ -508,70 +546,184 @@ export default class HelloWorld {
 			// );
 			// console.log("procedures", typeof impi.data[2].procedures);
 			// console.log("procedures", impi.data[2].procedures);
-			impi.data.forEach((record: object, index: number) => {
-				const screen = MRE.Actor.Create(this.context, {
-					actor: {
-						parentId: impiBody.id,
-						appearance: { enabled: false },
-						transform: {
-							local: { position: { x: -1.4, y: 0.9, z: 0 } },
-						},
-					},
-				});
-				screens.push(screen);
-				this.createText(
-					`${index + 1}/${impi.data.length}`,
-					"numerator",
-					screen.id,
-					MRE.TextAnchorLocation.MiddleCenter,
-					{ x: 1.4, y: 0.2, z: 0 },
-					0.2
+
+			const { mainScreens, proceduresArrays, pAndSArrays } =
+				this.createImpiScreens(impi.data, impiRecords);
+
+			// Buttons
+			let currentMainScreen = 0;
+
+			// Buttons to show Products and Services
+			let showPandS = false;
+			const psButtonBox = this.createButtonBox(
+				"psBox",
+				impiRecords.id,
+				{ x: -2, y: 0.8, z: 0 },
+				{ x: 0.8, y: 0.4, z: BUTTONWIDTH }
+			);
+			const psButtonLabel = this.createBoxLabel(
+				"Products and\nServices",
+				psButtonBox.id,
+				XSCALESUBSCREENS,
+				YSCALESUBSCREENS
+			);
+			// Button to show procedures
+			let showProcedure = false;
+			const proceduresButtonBox = this.createButtonBox(
+				"proceduresBox",
+				impiRecords.id,
+				{ x: -2, y: 0.3, z: 0 },
+				{ x: 0.8, y: 0.4, z: BUTTONWIDTH }
+			);
+			const proceduresButtonLabel = this.createBoxLabel(
+				"Procedures",
+				proceduresButtonBox.id,
+				XSCALESUBSCREENS,
+				YSCALESUBSCREENS
+			);
+
+			// procedures and products & Services buttons behaviors
+			psButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				if (showProcedure) {
+					const changeSubScreen = this.showSubScreen(
+						showProcedure,
+						proceduresButtonLabel,
+						screensToNavigate,
+						mainScreens,
+						currentMainScreen,
+						proceduresArrays,
+						"Procedures"
+					);
+					showProcedure = changeSubScreen.showingAlready;
+					currentMainScreen = changeSubScreen.currentMainScreen;
+				}
+				const changeSubScreen = this.showSubScreen(
+					showPandS,
+					psButtonLabel,
+					screensToNavigate,
+					mainScreens,
+					currentMainScreen,
+					pAndSArrays,
+					"Product And\nServices"
 				);
-				let textYPos = 0;
-				let i = 0;
-				for (const [key, value] of Object.entries(record)) {
-					if (typeof value === "object") {
-						if (Array.isArray(value)) {
-							console.log("el array", key, value);
-							this.createText(
-								`${key}: is an array`,
-								`satDataField${i}`,
-								screen.id,
-								MRE.TextAnchorLocation.TopLeft,
-								{ x: 0, y: textYPos, z: 0 },
-								TEXTDATAHEIGHT,
-								{ r: 1, g: 1, b: 1 }
-							);
-							textYPos -= TEXTDATAHEIGHT;
-						} else {
-							this.createText(
-								`${key}:`,
-								`satDataField${i}`,
-								screen.id,
-								MRE.TextAnchorLocation.TopLeft,
-								{ x: 0, y: textYPos, z: 0 },
-								TEXTDATAHEIGHT,
-								{ r: 1, g: 1, b: 1 }
-							);
-							textYPos -= TEXTDATAHEIGHT;
-							for (const [okey, ovalue] of Object.entries(
-								value
-							)) {
-								this.createText(
-									`        ${okey}: ${ovalue}`,
-									`satDataField${i}`,
-									screen.id,
-									MRE.TextAnchorLocation.TopLeft,
-									{ x: 0, y: textYPos, z: 0 },
-									TEXTDATAHEIGHT,
-									{ r: 1, g: 1, b: 1 }
-								);
-								textYPos -= TEXTDATAHEIGHT;
-							}
-						}
-					} else {
+				showPandS = changeSubScreen.showingAlready;
+				currentMainScreen = changeSubScreen.currentMainScreen;
+			});
+
+			proceduresButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				if (showPandS) {
+					const changeSubScreen = this.showSubScreen(
+						showPandS,
+						psButtonLabel,
+						screensToNavigate,
+						mainScreens,
+						currentMainScreen,
+						pAndSArrays,
+						"Product And\nServices"
+					);
+					showPandS = changeSubScreen.showingAlready;
+					currentMainScreen = changeSubScreen.currentMainScreen;
+				}
+				const changeSubScreen = this.showSubScreen(
+					showProcedure,
+					proceduresButtonLabel,
+					screensToNavigate,
+					mainScreens,
+					currentMainScreen,
+					proceduresArrays,
+					"Procedures"
+				);
+				showProcedure = changeSubScreen.showingAlready;
+				currentMainScreen = changeSubScreen.currentMainScreen;
+			});
+
+			// Buttons to move between records
+			screensToNavigate.screens = mainScreens;
+			screensToNavigate.currentScreen = currentMainScreen;
+
+			mainScreens[currentMainScreen].appearance.enabled = true;
+			const nextButtonBox = this.createButtonBox(
+				"impiNext",
+				impiRecords.id,
+				{ x: -2, y: -0.2, z: 0 },
+				{ x: 0.8, y: 0.4, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Next", nextButtonBox.id, 1, 1.8);
+			nextButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screensToNavigate.screens[
+					screensToNavigate.currentScreen
+				].appearance.enabled = false;
+				screensToNavigate.currentScreen =
+					(screensToNavigate.currentScreen + 1) %
+					screensToNavigate.screens.length;
+				screensToNavigate.screens[
+					screensToNavigate.currentScreen
+				].appearance.enabled = true;
+			});
+			const prevButtonBox = this.createButtonBox(
+				"impiPrev",
+				impiRecords.id,
+				{ x: -2, y: -0.7, z: 0 },
+				{ x: 0.8, y: 0.4, z: BUTTONWIDTH }
+			);
+			this.createBoxLabel("Prev", prevButtonBox.id, 1, 1.8);
+			prevButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
+				screensToNavigate.screens[
+					screensToNavigate.currentScreen
+				].appearance.enabled = false;
+				screensToNavigate.currentScreen =
+					(screensToNavigate.currentScreen - 1) %
+					screensToNavigate.screens.length;
+				screensToNavigate.currentScreen =
+					screensToNavigate.currentScreen === -1
+						? screensToNavigate.screens.length - 1
+						: screensToNavigate.currentScreen;
+				screensToNavigate.screens[
+					screensToNavigate.currentScreen
+				].appearance.enabled = true;
+			});
+		}
+	}
+
+	private createImpiScreens(
+		data: object[],
+		impiRecords: MRE.Actor
+	): {
+		mainScreens: MRE.Actor[];
+		proceduresArrays: MRE.Actor[][];
+		pAndSArrays: MRE.Actor[][];
+	} {
+		const mainScreens = new Array<MRE.Actor>();
+		const proceduresArrays = new Array<MRE.Actor[]>();
+		const pAndSArrays = new Array<MRE.Actor[]>();
+		data.forEach((record: object, index: number) => {
+			const screen = MRE.Actor.Create(this.context, {
+				actor: {
+					parentId: impiRecords.id,
+					appearance: { enabled: false },
+					transform: {
+						local: { position: { x: -1.4, y: 0.9, z: 0 } },
+					},
+				},
+			});
+			mainScreens.push(screen);
+			this.createText(
+				`Brand: ${index + 1}/${data.length}`,
+				"numerator",
+				screen.id,
+				MRE.TextAnchorLocation.MiddleCenter,
+				{ x: 1.4, y: 0.2, z: 0 },
+				0.2
+			);
+			let textYPos = 0;
+			let i = 0;
+			for (const [key, value] of Object.entries(record)) {
+				if (typeof value === "object") {
+					if (Array.isArray(value)) {
 						this.createText(
-							`${key}: ${value}`,
+							`${key}: ${value.length} ${
+								value.length !== 1 ? "items" : "item"
+							}`,
 							`satDataField${i}`,
 							screen.id,
 							MRE.TextAnchorLocation.TopLeft,
@@ -580,40 +732,154 @@ export default class HelloWorld {
 							{ r: 1, g: 1, b: 1 }
 						);
 						textYPos -= TEXTDATAHEIGHT;
+						if (key === "procedures") {
+							const proceduresRecord = this.createSubScreens(
+								value,
+								impiRecords.id,
+								"Procedures"
+							);
+							proceduresArrays.push(proceduresRecord);
+						} else if (key === "productsAndServices") {
+							const pasRecord = this.createSubScreens(
+								value,
+								impiRecords.id,
+								"Product and/or Service"
+							);
+							pAndSArrays.push(pasRecord);
+						}
+					} else {
+						this.createText(
+							`${key}:`,
+							`satDataField${i}`,
+							screen.id,
+							MRE.TextAnchorLocation.TopLeft,
+							{ x: 0, y: textYPos, z: 0 },
+							TEXTDATAHEIGHT,
+							{ r: 1, g: 1, b: 1 }
+						);
+						textYPos -= TEXTDATAHEIGHT;
+						for (const [okey, ovalue] of Object.entries(value)) {
+							this.createText(
+								`        ${okey}: ${ovalue}`,
+								`satDataField${i}`,
+								screen.id,
+								MRE.TextAnchorLocation.TopLeft,
+								{ x: 0, y: textYPos, z: 0 },
+								TEXTDATAHEIGHT,
+								{ r: 1, g: 1, b: 1 }
+							);
+							textYPos -= TEXTDATAHEIGHT;
+						}
 					}
-					i += 1;
+				} else {
+					this.createText(
+						`${key}: ${value}`,
+						`satDataField${i}`,
+						screen.id,
+						MRE.TextAnchorLocation.TopLeft,
+						{ x: 0, y: textYPos, z: 0 },
+						TEXTDATAHEIGHT,
+						{ r: 1, g: 1, b: 1 }
+					);
+					textYPos -= TEXTDATAHEIGHT;
 				}
-			});
-			let currentScreen = 0;
-			screens[currentScreen].appearance.enabled = true;
+				i += 1;
+			}
+		});
+		return { mainScreens, proceduresArrays, pAndSArrays };
+	}
 
-			const nextButtonBox = this.createButtonBox(
-				"satNext",
-				impiBody.id,
-				{ x: -2, y: 0.3, z: 0 },
-				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
-			);
-			this.createBoxLabel("Next", nextButtonBox.id, 1, 1.5);
-			nextButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
-				screens[currentScreen].appearance.enabled = false;
-				currentScreen = (currentScreen + 1) % screens.length;
-				screens[currentScreen].appearance.enabled = true;
+	private createSubScreens(
+		records: object[],
+		parentId: MRE.Guid,
+		name: string
+	): MRE.Actor[] {
+		const subScreens = new Array<MRE.Actor>();
+		let screenCount = 0;
+		for (const record of records) {
+			const recordScreen = MRE.Actor.Create(this.context, {
+				actor: {
+					parentId: parentId,
+					appearance: { enabled: false },
+					transform: {
+						local: {
+							position: {
+								x: -1.4,
+								y: 0.9,
+								z: 0,
+							},
+						},
+					},
+				},
 			});
-			const prevButtonBox = this.createButtonBox(
-				"satNext",
-				impiBody.id,
-				{ x: -2, y: -0.3, z: 0 },
-				{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+			screenCount += 1;
+			this.createText(
+				`${name}: ${screenCount}/${records.length}`,
+				"numerator",
+				recordScreen.id,
+				MRE.TextAnchorLocation.MiddleCenter,
+				{ x: 1.4, y: 0.2, z: 0 },
+				0.2
 			);
-			this.createBoxLabel("Prev", prevButtonBox.id, 1, 1.5);
-			prevButtonBox.setBehavior(MRE.ButtonBehavior).onClick(() => {
-				screens[currentScreen].appearance.enabled = false;
-				currentScreen = (currentScreen - 1) % screens.length;
-				currentScreen =
-					currentScreen === -1 ? screens.length - 1 : currentScreen;
-				screens[currentScreen].appearance.enabled = true;
-			});
+			let yPos = 0;
+			for (const [pkey, pvalue] of Object.entries(record)) {
+				this.createText(
+					`        ${pkey}: ${pvalue}`,
+					`satDataField`,
+					recordScreen.id,
+					MRE.TextAnchorLocation.TopLeft,
+					{ x: 0, y: yPos, z: 0 },
+					TEXTDATAHEIGHT,
+					{ r: 1, g: 1, b: 1 }
+				);
+				yPos -= TEXTDATAHEIGHT;
+			}
+			subScreens.push(recordScreen);
 		}
+		return subScreens;
+	}
+
+	private showSubScreen(
+		showingAlready: boolean,
+		buttonLabel: MRE.Actor,
+		screensToNavigate: ScreenRecords,
+		mainScreens: MRE.Actor[],
+		currentMainScreen: number,
+		subScreenArrays: MRE.Actor[][],
+		changingLabel: string
+	): { showingAlready: boolean; currentMainScreen: number } {
+		if (showingAlready) {
+			buttonLabel.transform.local.scale.x = XSCALESUBSCREENS;
+			buttonLabel.transform.local.scale.y = YSCALESUBSCREENS;
+			buttonLabel.text.contents = changingLabel;
+			buttonLabel.text.color = { r: 0, g: 0, b: 0 };
+			screensToNavigate.screens[
+				screensToNavigate.currentScreen
+			].appearance.enabled = false;
+			screensToNavigate.screens = mainScreens;
+			screensToNavigate.currentScreen = currentMainScreen;
+			screensToNavigate.screens[
+				screensToNavigate.currentScreen
+			].appearance.enabled = true;
+			showingAlready = false;
+		} else {
+			buttonLabel.transform.local.scale.x = 1;
+			buttonLabel.transform.local.scale.y = 1.5;
+			buttonLabel.text.contents = "Back";
+			buttonLabel.text.color = { r: 0.4, g: 0.4, b: 0 };
+			screensToNavigate.screens[
+				screensToNavigate.currentScreen
+			].appearance.enabled = false;
+			screensToNavigate.screens =
+				subScreenArrays[screensToNavigate.currentScreen];
+			currentMainScreen = screensToNavigate.currentScreen;
+			screensToNavigate.currentScreen = 0;
+			screensToNavigate.screens[
+				screensToNavigate.currentScreen
+			].appearance.enabled = true;
+			showingAlready = true;
+		}
+		return { showingAlready, currentMainScreen };
 	}
 
 	private showActor(actor: MRE.Actor, show: boolean, y?: number) {
@@ -668,7 +934,11 @@ export default class HelloWorld {
 		if (baseOptionsData.length > 0) {
 			baseOptionsData[0].destroy();
 		}
-		this.showActor(this.startButton, true, 0);
+		const startingButtons = this.base.findChildrenByName(
+			"startingButtons",
+			true
+		)[0];
+		this.showActor(startingButtons, true, 0);
 	}
 
 	private createButtonBox(
@@ -711,7 +981,7 @@ export default class HelloWorld {
 				},
 				transform: {
 					local: {
-						position: { x: 0, y: 0, z: -1 },
+						position: { x: 0, y: 0, z: -0.6 },
 						scale: { x: xScale, y: yScale, z: 1 },
 					},
 				},
