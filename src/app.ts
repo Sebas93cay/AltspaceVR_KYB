@@ -24,11 +24,19 @@ interface ScreenRecords {
 export default class HelloWorld {
 	// private button: MRE.Actor = null;
 	private base: MRE.Actor = null;
+	private waitingText: MRE.Actor = null;
 	private assets: MRE.AssetContainer;
+	private attachments = new Map<MRE.Guid, MRE.Actor>();
 
 	constructor(private context: MRE.Context) {
 		this.context.onStarted(() => this.started());
+		this.context.onUserLeft((user) => this.userLeft(user));
+		// this.context.onUserJoined((user) => this.userJoined(user));
 	}
+
+	// private userJoined(user: MRE.User) {
+	// 	this.setVerification(user);
+	// }
 
 	/**
 	 * Once the context is "started", initialize the app.
@@ -37,56 +45,258 @@ export default class HelloWorld {
 		// set up somewhere to store loaded assets (meshes, textures, animations, gltfs, etc.)
 		this.assets = new MRE.AssetContainer(this.context);
 		this.base = MRE.Actor.Create(this.context, {});
+		const startButton = this.createButtonBox(
+			"startButton",
+			this.base.id,
+			{ x: 0, y: 0, z: 0 },
+			{ x: 0.8, y: 0.5, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("Start", startButton.id, 1, 1);
+
+		const startingButtons = this.startingButtons(startButton);
+
+		this.waitingText = this.createText(
+			"Please wait a moment ...",
+			"waitingText",
+			null,
+			MRE.TextAnchorLocation.MiddleCenter
+		);
+		this.waitingText.appearance.enabled = false;
+
+		//buttons has to behave buttons
+		startButton.setBehavior(MRE.ButtonBehavior).onClick(() => {
+			this.showActor(startButton, false);
+			this.showActor(startingButtons, true, 0);
+		});
+	}
+
+	private startingButtons(startButton: MRE.Actor): MRE.Actor {
 		const startingButtons = MRE.Actor.Create(this.context, {
 			actor: {
 				name: "startingButtons",
 				parentId: this.base.id,
+				appearance: { enabled: false },
 			},
 		});
-		const startButton = this.createButtonBox(
-			"intialButton",
+
+		const backButton = this.createButtonBox(
+			"backButton",
+			startingButtons.id,
+			{ x: -1, y: 0, z: 0 },
+			{ x: 0.6, y: 0.4, z: BUTTONWIDTH }
+		);
+		this.createBoxLabel("back", backButton.id, 0.8, 1);
+
+		const userIdentificationButton = this.createButtonBox(
+			"userIdentification",
 			startingButtons.id,
 			{ x: 0, y: 0, z: 0 },
 			{ x: 0.9, y: 0.5, z: BUTTONWIDTH }
 		);
-		this.createBoxLabel("KYB", startButton.id, 1, 1);
+		this.createBoxLabel(
+			"Check\n User",
+			userIdentificationButton.id,
+			0.7,
+			0.8
+		);
 
-		const historyButton = this.createButtonBox(
-			"historyButton",
+		const kybButton = this.createButtonBox(
+			"intialButton",
 			startingButtons.id,
 			{ x: 1, y: 0, z: 0 },
 			{ x: 0.9, y: 0.5, z: BUTTONWIDTH }
 		);
-		this.createBoxLabel("Search\nHistory", historyButton.id, 0.6, 0.7);
+		this.createBoxLabel("KYB", kybButton.id, 0.8, 1);
 
-		//button has to behave as a button
-		const buttonBehavior = startButton.setBehavior(MRE.ButtonBehavior);
+		// Buttons actions
+		kybButton
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick((user) => this.promptKYB(user));
+		backButton.setBehavior(MRE.ButtonBehavior).onClick(() => {
+			this.showActor(startingButtons, false);
+			this.showActor(startButton, true, 0);
+		});
+		userIdentificationButton
+			.setBehavior(MRE.ButtonBehavior)
+			.onClick((user) => {
+				this.autenticateUser(user);
+			});
 
-		//nice hover in button
-		buttonBehavior.onHover("enter", () => {
-			// use the convenience function "AnimateTo" instead of creating the animation data in advance
-			MRE.Animation.AnimateTo(this.context, startButton, {
-				destination: {
-					transform: {
-						local: { scale: { x: 1, y: 0.6, z: BUTTONWIDTH } },
+		return startingButtons;
+	}
+
+	private autenticateUser(user: MRE.User) {
+		console.log(`${user.name} start the user autentication`);
+		let names: string[];
+
+		const startButton = this.base.findChildrenByName(
+			"startButton",
+			true
+		)[0];
+
+		user.prompt(
+			`You are about to "prove" your identity
+		Please provide your phone number and in short we'll ask you to provide your name
+		If the data match in our database, you are good to go
+		Are you ready?`,
+			false
+		)
+			.then((userAccept) => {
+				if (userAccept.submitted) {
+					return user.prompt("Provide a phone number", true);
+				} else {
+					console.log("user canceled autentication");
+				}
+			})
+			.then(async (phone) => {
+				if (phone.submitted && phone.text.length > 0) {
+					this.showActor(this.waitingText, true);
+					const startingButtons = this.base.findChildrenByName(
+						"startingButtons",
+						true
+					)[0];
+					this.showActor(startingButtons, false);
+					const personConsult = await this.searchPerson(phone.text);
+					this.showActor(this.waitingText, false);
+					if (personConsult.code === 200) {
+						names = this.getNamesFromPerson(personConsult);
+						return user.prompt("Awesome! What is your name?", true);
+					} else {
+						user.prompt(
+							"We could not find any record with your data"
+						);
+						this.showActor(startButton, true);
+					}
+				} else if (phone.submitted) {
+					user.prompt("The phone number is necesary", false);
+				} else {
+					console.log("user canceled phone number");
+				}
+			})
+			.then((name) => {
+				if (name.submitted && name.text.length > 0) {
+					if (this.compareName(names, name.text)) {
+						user.prompt(
+							"Alright! your identity has been verified :)"
+						);
+						this.setVerification(user);
+					} else {
+						user.prompt("Ops! looks like something is wrong");
+					}
+				} else if (name.submitted) {
+					user.prompt(
+						"Your name is necessary for the authentication",
+						false
+					);
+				} else {
+					console.log("user canceled in name query");
+				}
+			})
+			.then(() => {
+				this.showActor(startButton, true);
+			})
+			.catch((err) => {
+				console.log(err);
+			});
+	}
+
+	private setVerification(user: MRE.User) {
+		const verificationMarks = MRE.Actor.Create(this.context, {
+			actor: {
+				attachment: {
+					attachPoint: "head",
+					userId: user.id,
+				},
+			},
+		});
+		this.attachments.set(user.id, verificationMarks);
+
+		MRE.Actor.Create(this.context, {
+			actor: {
+				parentId: verificationMarks.id,
+				name: "headMark",
+				text: {
+					contents: "verified",
+					anchor: MRE.TextAnchorLocation.MiddleCenter,
+					color: { r: 36 / 255, g: 138 / 255, b: 25 / 255 },
+				},
+				transform: {
+					local: {
+						position: { x: 0.047, y: 0.05, z: 0.12 },
+						scale: { x: 0.004, y: 0.004, z: 0.004 },
 					},
 				},
-				duration: 0.3,
-				easing: MRE.AnimationEaseCurves.EaseOutSine,
-			});
+			},
 		});
-		buttonBehavior.onHover("exit", () => {
-			MRE.Animation.AnimateTo(this.context, startButton, {
-				destination: {
-					transform: {
-						local: { scale: { x: 0.9, y: 0.5, z: BUTTONWIDTH } },
+		MRE.Actor.CreateFromLibrary(this.context, {
+			actor: {
+				parentId: verificationMarks.id,
+				name: "headMark",
+				transform: {
+					local: {
+						position: { x: 0, y: 0.35, z: 0 },
+						scale: { x: 0.4, y: 0.4, z: 0.4 },
 					},
 				},
-				duration: 0.3,
-				easing: MRE.AnimationEaseCurves.EaseOutSine,
-			});
+			},
+			resourceId: "artifact:1579239603192201565",
 		});
-		buttonBehavior.onClick((user) => this.promptKYB(user));
+	}
+
+	private async searchPerson(phone: string): Promise<any> {
+		const personConsult = await fetch(
+			"https://nufi.azure-api.net/enriquecimientoinformacion/v1/busqueda",
+			{
+				method: "POST",
+				headers: {
+					"Conteng-Type": "application/json",
+					"Ocp-Apim-Subscription-Key":
+						"dfabbcc369324f2b9628cfa9fb63211a",
+				},
+				body: `{"telefono": "${phone}"}`,
+			}
+		)
+			.then((res) => res.json())
+			.then((res) => {
+				console.log("Person consult ready");
+				return res;
+			});
+
+		return personConsult;
+	}
+	private getNamesFromPerson(personConsult: {
+		data: {
+			person: { names: Array<{ display: string }> };
+			Name: { display: string };
+		};
+	}): string[] {
+		console.log("person:", personConsult);
+		const names = [];
+		try {
+			names.push(personConsult.data.Name.display);
+		} catch (error) {
+			console.log(error);
+		}
+		try {
+			names.push(personConsult.data.Name.display);
+		} catch (error) {
+			console.log(error);
+		}
+
+		console.log("names:", names);
+		return names;
+	}
+
+	private compareName(names: string[], name: string): boolean {
+		let nameMatch = false;
+		name = name.toLowerCase();
+		for (const nameObtained of names) {
+			if (nameObtained.toLowerCase().includes(name)) {
+				nameMatch = true;
+				break;
+			}
+		}
+		return nameMatch;
 	}
 
 	private promptKYB(user: MRE.User) {
@@ -95,8 +305,8 @@ export default class HelloWorld {
 		let brand: string;
 		console.log(`${user.name} has pressed the button`);
 		user.prompt(
-			`Welcome to your everyday VR KYB!
-			Please insert the name of the company`,
+			`Welcome to your everyday KYB VR!
+			Please insert the name of the company or person`,
 			// 	`Bienvenido a su KYB VR
 			// Por favor introduzca la Razón Social:`,
 			true
@@ -146,22 +356,17 @@ export default class HelloWorld {
 	}
 
 	private kybSearch(companyName: string, rfc: string, brand: string) {
-		console.log(companyName, rfc, brand);
+		// console.log(companyName, rfc, brand);
 		const startingButtons = this.base.findChildrenByName(
 			"startingButtons",
 			true
 		)[0];
 		this.showActor(startingButtons, false, 0);
-		const waitingText = this.createText(
-			"Please wait a moment ...",
-			"waitingText",
-			null,
-			MRE.TextAnchorLocation.MiddleCenter
-		);
+		this.showActor(this.waitingText, true);
 
 		this.consult(companyName, brand, rfc).then((res) => {
 			this.createOptions();
-			waitingText.destroy();
+			this.showActor(this.waitingText, false);
 			this.createOptionsData(res.sat, res.brands);
 		});
 	}
@@ -187,7 +392,7 @@ export default class HelloWorld {
 			)
 				.then((res) => res.json())
 				.then((res) => {
-					console.log("Brands listas");
+					console.log("Brands ready");
 					return res;
 				});
 		} else {
@@ -414,7 +619,7 @@ export default class HelloWorld {
 		});
 		if (sat.code === 204) {
 			this.createText(
-				sat.message,
+				`message: "${sat.message}"`,
 				"message",
 				satBody.id,
 				MRE.TextAnchorLocation.TopLeft,
@@ -501,7 +706,7 @@ export default class HelloWorld {
 		});
 		if (!impi) {
 			this.createText(
-				"No se hizo ninguna consulta de marcas",
+				"No brand consult was perfomed",
 				"message",
 				impiBody.id,
 				MRE.TextAnchorLocation.TopLeft,
@@ -526,26 +731,10 @@ export default class HelloWorld {
 					parentId: impiBody.id,
 				},
 			});
-			// const mainScreens = new Array<MRE.Actor>();
-			// const procedures = new Array<MRE.Actor[]>();
 			const screensToNavigate: ScreenRecords = {
 				screens: null,
 				currentScreen: 0,
 			};
-			// console.log("general data", typeof impi.data[2].generalData);
-			// console.log("general data", impi.data[2].generalData);
-			// console.log("headline data", typeof impi.data[2].headlineData);
-			// console.log("headline data", impi.data[2].headlineData);
-			// console.log(
-			// 	"product and services",
-			// 	typeof impi.data[2].productsAndServices
-			// );
-			// console.log(
-			// 	"product and services",
-			// 	impi.data[2].productsAndServices
-			// );
-			// console.log("procedures", typeof impi.data[2].procedures);
-			// console.log("procedures", impi.data[2].procedures);
 
 			const { mainScreens, proceduresArrays, pAndSArrays } =
 				this.createImpiScreens(impi.data, impiRecords);
@@ -882,7 +1071,7 @@ export default class HelloWorld {
 		return { showingAlready, currentMainScreen };
 	}
 
-	private showActor(actor: MRE.Actor, show: boolean, y?: number) {
+	private showActor(actor: MRE.Actor, show: boolean, y = 0) {
 		actor.appearance.enabled = show;
 		actor.transform.local.position.y = show ? y : 10;
 	}
@@ -916,7 +1105,7 @@ export default class HelloWorld {
 	}
 
 	private destroyActorInBase(name: string) {
-		const actor = this.base.findChildrenByName("baseOptions", true);
+		const actor = this.base.findChildrenByName(name, true);
 		if (actor.length > 0) {
 			actor[0].destroy();
 		}
@@ -947,7 +1136,7 @@ export default class HelloWorld {
 		position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 },
 		scale: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }
 	): MRE.Actor {
-		return MRE.Actor.CreatePrimitive(this.assets, {
+		const box = MRE.Actor.CreatePrimitive(this.assets, {
 			definition: { shape: MRE.PrimitiveShape.Box },
 			actor: {
 				parentId: parentId,
@@ -961,6 +1150,38 @@ export default class HelloWorld {
 				},
 			},
 		});
+		box.setBehavior(MRE.ButtonBehavior);
+		//nice hover in button
+		// boxBehavior.onHover("enter", () => {
+		// 	// use the convenience function "AnimateTo" instead of creating the animation data in advance
+		// 	MRE.Animation.AnimateTo(this.context, box, {
+		// 		destination: {
+		// 			transform: {
+		// 				local: {
+		// 					scale: {
+		// 						x: scale.x + 1,
+		// 						y: scale.y + 0.1,
+		// 						z: scale.z + 0.1,
+		// 					},
+		// 				},
+		// 			},
+		// 		},
+		// 		duration: 0.3,
+		// 		easing: MRE.AnimationEaseCurves.EaseOutSine,
+		// 	});
+		// });
+		// boxBehavior.onHover("exit", () => {
+		// 	MRE.Animation.AnimateTo(this.context, box, {
+		// 		destination: {
+		// 			transform: {
+		// 				local: { scale: scale },
+		// 			},
+		// 		},
+		// 		duration: 0.3,
+		// 		easing: MRE.AnimationEaseCurves.EaseOutSine,
+		// 	});
+		// });
+		return box;
 	}
 
 	private createBoxLabel(
@@ -999,5 +1220,19 @@ export default class HelloWorld {
 				resolve(3);
 			}, 500);
 		});
+	}
+
+	private userLeft(user: MRE.User) {
+		console.log(`${user.name} left :(`);
+
+		if (this.attachments.has(user.id)) {
+			const attachment = this.attachments.get(user.id);
+
+			attachment.detach();
+
+			attachment.destroy();
+
+			this.attachments.delete(user.id);
+		}
 	}
 }
